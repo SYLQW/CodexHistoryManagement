@@ -219,3 +219,5 @@ build_codex_sidebar_repair_exe.bat
 4. 重新打开 Codex
 5. 如果状态又被覆盖，再点“开始守护”
 
+
+友链：https://linux.do/
