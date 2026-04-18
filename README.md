@@ -1,47 +1,84 @@
-# Codex 侧边栏对话修复工具
+# Codex 侧边栏与对话恢复工具
 
-这是一个用于修复 Codex Desktop 侧边栏历史对话显示问题的小工具。
+这是一个用于修复 Codex Desktop 历史对话显示问题的小工具。
+
+它现在不只修复“项目工作区入口”，还会同步历史会话的 `provider` 元数据。这样在别人电脑上使用时，不会再出现“项目文件夹恢复出来了，但旧对话没有显示”的情况。
+
+## 1. 这个工具解决什么问题
 
 适用场景：
 
-- 以前的很多对话还在本地数据库里，但侧边栏只显示很少几个项目
-- 侧边栏分组不完整，只能看到少量工作区
-- 修改过状态文件后，Codex 运行时又把设置覆盖回去
+- 以前的对话文件还在本地，但 Codex 侧边栏里只显示很少几个项目
+- 只能恢复项目分组，看不到项目下面以前的对话
+- 旧对话存在于 `sessions` 或 `state_5.sqlite` 中，但因为 `provider` 不一致没有显示出来
+- Codex 运行过程中会把本地状态重新覆盖回去
 
-这个工具已经封装成了图形界面程序，也可以用 Python 命令行方式运行。
+## 2. 为什么以前只能恢复项目，不能恢复对话
 
-## 1. 工具原理
+之前的版本只修复了“工作区侧边栏状态”，也就是：
 
-这个工具的修复逻辑来自本次实际排查结果，核心做了下面几件事：
+- 工作区列表
+- 项目排序
+- 项目标签
+- 侧边栏筛选状态
 
-1. 从 `state_5.sqlite` 中读取未归档线程的 `cwd`
-2. 重建历史工作区根目录列表
-3. 去掉 Windows 路径中的 `\\?\` 前缀
-4. 对工作区路径按顺序去重
-5. 回填 `.codex-global-state.json` 中与侧边栏相关的状态
-6. 强制将侧边栏设置为：
-   - 显示全部工作区
-   - 按项目分组
-   - 清空折叠分组状态
-7. 修复前自动备份状态文件
-8. 可选开启“守护模式”，定时重复修复，防止运行中的 Codex 再次覆盖状态
+但真正影响旧对话是否显示出来的，还有一层：
 
-## 2. 相关文件
+- `sessions/*.jsonl` 与 `archived_sessions/*.jsonl` 中的 `model_provider`
+- `state_5.sqlite` 里 `threads.model_provider`
 
-当前目录下主要有这些文件：
+如果这些旧会话的 `provider` 和当前机器上的 Codex 配置不一致，Codex 可能就不会把这些对话显示出来。
+
+这也是为什么有些人用 [codex-provider-sync](https://github.com/Dailin521/codex-provider-sync) 点击“同步”后，对话就出现了。
+
+现在这个工具已经把这一步也补上了。
+
+## 3. 当前版本做了哪些事
+
+修复时会做两类操作。
+
+### A. 修复侧边栏工作区状态
+
+会从 `state_5.sqlite` 中重建工作区根目录，并写回：
+
+- `electron-saved-workspace-roots`
+- `project-order`
+- `active-workspace-roots`
+- `electron-workspace-root-labels`
+- `electron-persisted-atom-state`
+
+并强制设置：
+
+- 显示全部工作区
+- 按项目分组
+- 清空折叠状态
+
+### B. 同步 provider 元数据
+
+会把历史对话同步到当前目标 provider，包括：
+
+- `sessions/**/*.jsonl`
+- `archived_sessions/**/*.jsonl`
+- `state_5.sqlite` 中的 `threads.model_provider`
+
+可选地还可以同步：
+
+- `config.toml` 根级 `model_provider`
+
+## 4. 当前目录下有哪些文件
 
 - `codex_sidebar_repair.py`
-  - 主逻辑文件
+  - 主逻辑脚本
 - `codex_sidebar_repair_gui.py`
-  - GUI 入口
+  - GUI 启动入口
 - `build_codex_sidebar_repair_exe.bat`
-  - 重新打包 EXE 的脚本
+  - 一键重新打包 EXE
 - `launch_codex_sidebar_repair.bat`
-  - 直接用 Python 启动 GUI 的脚本
+  - 直接用 Python 启动 GUI
 - `dist\CodexSidebarRepair.exe`
-  - 打包好的可执行文件
+  - 打包好的图形界面程序
 
-## 3. 最简单的使用方式
+## 5. 最简单的使用方式
 
 直接双击运行：
 
@@ -50,21 +87,13 @@
 推荐操作顺序：
 
 1. 点击“扫描”
-2. 查看“恢复出的工作区”里是否包含你以前用过的项目
-3. 点击“修复一次”
-4. 关闭并重新打开 Codex Desktop
-5. 检查侧边栏中的旧对话是否已经恢复
+2. 确认“恢复出的工作区”列表里包含以前用过的项目
+3. 查看“当前 config.toml 的 provider”和“Rollout provider 分布”
+4. 点击“修复一次”
+5. 完全退出 Codex Desktop 再重新打开
+6. 查看侧边栏中的旧对话是否已经恢复
 
-如果你发现 Codex 打开后又把状态改回去了：
-
-1. 打开工具
-2. 点击“开始守护”
-3. 保持工具运行
-4. 再重新打开 Codex
-
-不用守护时，点击“停止守护”即可。
-
-## 4. 图形界面说明
+## 6. 图形界面说明
 
 ### Codex 目录
 
@@ -72,30 +101,35 @@
 
 `C:\Users\你的用户名\.codex`
 
-如果你的 Codex 数据目录没有改过，保持默认即可。
+通常不需要改。
 
 ### 扫描
 
 作用：
 
-- 只读取数据库和状态文件
+- 只读取数据库、配置文件和 rollout 文件
 - 不修改任何内容
-- 用于确认能恢复出多少工作区
+- 查看当前工作区和 provider 分布
 
 ### 修复一次
 
 作用：
 
-- 立即执行一次修复
-- 自动备份当前 `.codex-global-state.json`
-- 写入修复后的工作区和侧边栏状态
+- 修复侧边栏工作区状态
+- 同步历史对话的 provider 元数据
+- 自动备份所有被修改的重要文件
 
 ### 开始守护
 
 作用：
 
-- 每隔几秒自动执行一次检查和修复
-- 用于应对 Codex 运行时把状态覆盖回去的情况
+- 每隔几秒自动修复一次侧边栏状态
+- 用于应对 Codex 运行时把工作区状态覆盖回去
+
+注意：
+
+- 守护模式主要保护侧边栏状态
+- `provider` 同步通常执行一次就够，不需要反复扫所有会话
 
 ### 停止守护
 
@@ -105,15 +139,32 @@
 
 ### 将 active-workspace-roots 同步为全部恢复出的工作区
 
-勾选时：
+建议保持勾选。
 
-- 会把 `active-workspace-roots` 设置为全部恢复出的工作区
+### 修复时同步 provider 元数据
 
-一般建议保持勾选。
+建议保持勾选。
 
-## 5. 命令行用法
+如果你取消勾选，就只会修复工作区入口，不会同步旧对话的 provider。
 
-如果你不想用图形界面，也可以直接运行 Python 脚本。
+### 同时写回 config.toml 的 provider
+
+默认不勾选。
+
+只有在你明确想把 `config.toml` 根级 `model_provider` 一并改掉时再开启。
+
+### 目标 Provider
+
+默认会自动读取当前 `config.toml` 里的 `model_provider`。
+
+例如：
+
+- `custom`
+- `openai`
+
+如果你想强制把历史会话同步成某个 provider，可以手动填写这里。
+
+## 7. 命令行用法
 
 ### 仅预览
 
@@ -127,7 +178,25 @@ python codex_sidebar_repair.py --preview
 python codex_sidebar_repair.py --repair
 ```
 
-### 持续守护
+### 仅同步 provider
+
+```bash
+python codex_sidebar_repair.py --sync-provider-only
+```
+
+### 指定目标 provider
+
+```bash
+python codex_sidebar_repair.py --repair --provider custom
+```
+
+### 同步时顺便修改 config.toml
+
+```bash
+python codex_sidebar_repair.py --repair --sync-config-provider
+```
+
+### 持续守护侧边栏状态
 
 ```bash
 python codex_sidebar_repair.py --watch
@@ -139,85 +208,68 @@ python codex_sidebar_repair.py --watch
 python codex_sidebar_repair.py --gui
 ```
 
-### 指定 Codex 数据目录
+## 8. 备份位置
 
-```bash
-python codex_sidebar_repair.py --repair --codex-home "C:\Users\SYKQW\.codex"
-```
+每次真正修改文件前，工具都会自动备份。
 
-## 6. 备份位置
-
-每次真正执行“修复一次”时，工具会先备份：
-
-`.codex-global-state.json`
-
-备份目录为：
+备份目录位于：
 
 `C:\Users\你的用户名\.codex\backups_state`
 
-如果修复结果不满意，你可以从这里手动找回旧版本。
+里面会按时间生成不同目录，例如：
 
-## 7. 重新打包 EXE
+- `sidebar-repair-时间戳`
+- `provider-sync-时间戳`
 
-如果你后面修改了 Python 代码，想重新生成 EXE，可以运行：
+## 9. 重新打包 EXE
+
+如果你修改了 Python 文件，重新打包的方法是：
 
 ```bat
 build_codex_sidebar_repair_exe.bat
 ```
 
-生成后的文件在：
+打包完成后，生成文件在：
 
 `dist\CodexSidebarRepair.exe`
 
-## 8. 注意事项
+## 10. 注意事项
 
-1. 这个工具主要修复“侧边栏不显示完整历史对话”的问题，不会修改聊天内容本身。
-2. 只有数据库里仍然存在的对话，才有机会通过这个工具重新显示出来。
-3. 如果某些项目根目录已经不存在，仍然有可能恢复出分组，但显示效果可能受 Codex 当前版本影响。
-4. 如果 Codex 正在运行，它可能会把状态再次改回去，所以有时需要配合“守护模式”。
-5. 修复完成后，通常建议完全退出 Codex 再重新打开，而不是只关闭窗口。
+1. 这个工具修复的是 Codex 本地状态和会话元数据，不会删除聊天内容。
+2. 只有本地数据库和 rollout 文件里仍然存在的对话，才有机会被恢复出来。
+3. 如果别人电脑上的当前 provider 和旧会话 provider 不一致，必须做 provider 同步，否则可能只看到项目看不到对话。
+4. 修复完成后，建议完全退出 Codex，再重新打开，而不是只关闭窗口。
+5. 如果侧边栏状态老是被覆盖，可以开“开始守护”。
 
-## 9. 常见问题
+## 11. 常见问题
 
-### 为什么扫描出来很多工作区，但侧边栏还是没全出来？
+### 为什么扫描能看到很多工作区，但还是没有完整对话？
 
-可能原因：
+常见原因：
 
-- Codex 还在运行，并再次覆盖了状态
-- 当前版本 Codex 对某些工作区还有额外筛选
-- 需要彻底退出 Codex 后重新进入
+- 只修了工作区，没有同步 provider
+- Codex 运行时又把状态覆盖了
+- 没有完全退出并重新打开 Codex
 
-建议：
+### 为什么现在和 codex-provider-sync 的效果接近了？
 
-1. 先点“修复一次”
-2. 完全退出 Codex
-3. 必要时开启“开始守护”
-4. 再重新打开 Codex
+因为现在这个工具也加入了对 `model_provider` 的同步，不再只修工作区列表。
 
-### 为什么工具里能看到工作区，但 Codex 里没有对应对话？
+### provider 同步安全吗？
 
-这说明：
+风险比较低，原因是：
 
-- 工作区路径可能还在数据库里
-- 但具体线程是否还能显示，还受 Codex 当前前端筛选逻辑影响
+- 工具只修改 Codex 本地文件
+- 每次修改前都会自动备份
+- 不会删除原始会话内容
 
-### 修复会不会有风险？
-
-风险很低，原因是：
-
-- 工具只改 Codex 的本地状态文件
-- 每次修复前会自动备份
-- 不会删除数据库内容
-
-## 10. 推荐用法
-
-对大多数人来说，最推荐的方式就是：
+## 12. 推荐使用顺序
 
 1. 双击 `dist\CodexSidebarRepair.exe`
-2. 点“扫描”
-3. 点“修复一次”
-4. 重新打开 Codex
-5. 如果状态又被覆盖，再点“开始守护”
+2. 点击“扫描”
+3. 保持“修复时同步 provider 元数据”为勾选状态
+4. 点击“修复一次”
+5. 完全退出 Codex
+6. 重新打开 Codex
+7. 如果工作区状态仍然会被改回去，再点击“开始守护”
 
-
-友链：https://linux.do/
