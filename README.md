@@ -273,3 +273,4 @@ build_codex_sidebar_repair_exe.bat
 6. 重新打开 Codex
 7. 如果工作区状态仍然会被改回去，再点击“开始守护”
 
+友链：linux.do
